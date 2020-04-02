@@ -1,0 +1,5 @@
+#ifndef SUPERSDL_SUPERSDL_HPP
+#define SUPERSDL_SUPERSDL_HPP
+
+
+#endif
