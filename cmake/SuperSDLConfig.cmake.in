@@ -1,0 +1,15 @@
+get_filename_component(SUPERSDL_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
+include(CMakeFindDependencyMacro)
+
+list(APPEND CMAKE_MODULE_PATH ${SUPERSDL_CMAKE_DIR})
+
+find_dependency(SDL2 REQUIRED)
+find_dependency(Vulkan REQUIRED)
+find_dependency(Freetype REQUIRED)
+find_dependency(glm REQUIRED)
+find_dependency(spdlog REQUIRED)
+find_dependency(toml11 REQUIRED)
+
+if(NOT TARGET SuperSDL::SuperSDL)
+	include("${SUPERSDL_CMAKE_DIR}/SuperSDLTargets.cmake")
+endif()
