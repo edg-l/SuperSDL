@@ -23,6 +23,7 @@ class CRenderer : CLoggable {
 		vk::PhysicalDevice m_PhysicalDevice;
 		vk::Device m_Device;
 		vk::Queue m_GraphicsQueue;
+		vk::Queue m_PresentQueue;
 		vk::SurfaceKHR m_Surface;
 		std::vector<const char*> m_ValidationLayers;
 
@@ -31,12 +32,15 @@ class CRenderer : CLoggable {
 		int rate_physical_device(const vk::PhysicalDevice &device) const;
 		void pick_physical_device();
 		void create_logical_device();
+		void create_surface();
 
 		struct QueueFamilyIndices {
 			std::optional<uint32_t> m_GraphicsFamily;
+			std::optional<uint32_t> m_PresentFamily;
 
 			bool is_complete() const {
-				return m_GraphicsFamily.has_value();
+				return m_GraphicsFamily.has_value()
+					&& m_PresentFamily.has_value();
 			}
 		};
 

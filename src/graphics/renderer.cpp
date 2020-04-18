@@ -27,7 +27,7 @@ const bool EnableValidationLayers = true;
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
 	(void)pUserData;
 	if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-		fprintf(stderr, "Vulkan layer: (severity=%d, type=%d) %s", messageSeverity, messageType, pCallbackData->pMessage);
+		fprintf(stderr, "Vulkan layer: (severity=%d, type=%d) %s\n", messageSeverity, messageType, pCallbackData->pMessage);
 	return VK_FALSE;
 }
 
@@ -40,14 +40,17 @@ CRenderer::CRenderer(CEngine *pEngine) : CLoggable("renderer"), m_Window(nullptr
 
 void CRenderer::init() {
 	// TODO: Use a config
+	Log()->info("Starting vulkan renderer...");
 	m_Window = util::make_resource(SDL_CreateWindow, SDL_DestroyWindow, "", SDL_WINDOWPOS_UNDEFINED,
 								   SDL_WINDOWPOS_UNDEFINED,
 								   640, 480,
 								   SDL_WINDOW_VULKAN);
 	create_instance();
 	setup_debug_callback();
+	create_surface();
 	pick_physical_device();
 	create_logical_device();
+	Log()->info("Renderer started.");
 }
 
 void CRenderer::quit() {
@@ -94,7 +97,7 @@ void CRenderer::create_instance() {
 		auto AvailableExtensions = vk::enumerateInstanceExtensionProperties();
 
 		for (const auto &ext : AvailableExtensions) {
-			Log()->info("Vulkan - Available extension: {}", ext.extensionName);
+			Log()->debug("Vulkan - Available extension: {}", ext.extensionName);
 		}
 
 		auto CreateInfo = vk::InstanceCreateInfo(
@@ -106,7 +109,7 @@ void CRenderer::create_instance() {
 		if (EnableValidationLayers) {
 			CreateInfo.enabledLayerCount = m_ValidationLayers.size();
 			CreateInfo.ppEnabledLayerNames = m_ValidationLayers.data();
-			Log()->info("Vulkan - Enabled validation layers (size={})", m_ValidationLayers.size());
+			Log()->debug("Vulkan - Enabled validation layers (size={})", m_ValidationLayers.size());
 		}
 
 		try {
@@ -121,6 +124,7 @@ void CRenderer::create_instance() {
 }
 
 int CRenderer::rate_physical_device(const vk::PhysicalDevice &device) const {
+	Log()->debug("Rating physical device: {}", device.getProperties().deviceName.data());
 	int score = 0;
 
 	vk::PhysicalDeviceProperties Properties = device.getProperties();
@@ -130,6 +134,7 @@ int CRenderer::rate_physical_device(const vk::PhysicalDevice &device) const {
 	if (Properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu)
 		score += 1000;
 
+	Log()->debug("MaxImageDimension2D: {}", Properties.limits.maxImageDimension2D);
 	score += Properties.limits.maxImageDimension2D;
 
 	if (!Features.geometryShader)
@@ -137,6 +142,8 @@ int CRenderer::rate_physical_device(const vk::PhysicalDevice &device) const {
 
 	if (!is_device_suitable(device))
 		return 0;
+
+	Log()->debug("Score: {}", score);
 
 	return score;
 }
@@ -148,6 +155,7 @@ bool CRenderer::is_device_suitable(const vk::PhysicalDevice &device) const {
 }
 
 void CRenderer::pick_physical_device() {
+	Log()->debug("Picking a physical device");
 	std::multimap<int, vk::PhysicalDevice> Candidates;
 
 	for (const auto &device : m_Instance.enumeratePhysicalDevices()) {
@@ -157,6 +165,7 @@ void CRenderer::pick_physical_device() {
 
 	if (Candidates.rbegin()->first > 0) {
 		m_PhysicalDevice = Candidates.rbegin()->second;
+	Log()->debug("Picked physical device: {}", m_PhysicalDevice.getProperties().deviceName.data());
 	} else {
 		throw std::runtime_error("Failed to find a suitable GPU.");
 	}
@@ -172,6 +181,11 @@ CRenderer::QueueFamilyIndices CRenderer::find_queue_families(const vk::PhysicalD
 		if (QueueFamily.queueCount > 0 && QueueFamily.queueFlags & vk::QueueFlagBits::eGraphics) {
 			Indices.m_GraphicsFamily = i;
 		}
+
+		if(QueueFamily.queueCount > 0 && Device.getSurfaceSupportKHR(i, m_Surface)) {
+			Indices.m_PresentFamily = i;
+		}
+
 		if (Indices.is_complete())
 			break;
 		i++;
@@ -181,6 +195,7 @@ CRenderer::QueueFamilyIndices CRenderer::find_queue_families(const vk::PhysicalD
 }
 
 void CRenderer::create_logical_device() {
+	Log()->debug("Creating logical device");
 	QueueFamilyIndices Indices = find_queue_families(m_PhysicalDevice);
 
 	float priority = 1.0f;
@@ -207,12 +222,24 @@ void CRenderer::create_logical_device() {
 
 	try {
 		m_Device = m_PhysicalDevice.createDevice(DeviceCreateInfo);
-	} catch(vk::SystemError err) {
-		throw std::runtime_error("Failed to create logical device.");
+	} catch(vk::SystemError &err) {
+		Log()->error("Failed to create logical device: {}", err.what());
+		throw std::runtime_error("Failed to create logical device:");
 	}
 
 	VULKAN_HPP_DEFAULT_DISPATCHER.init(m_Device);
 	m_GraphicsQueue = m_Device.getQueue(Indices.m_GraphicsFamily.value(), 0);
+	m_PresentQueue = m_Device.getQueue(Indices.m_PresentFamily.value(), 0);
+	Log()->debug("Logical device created");
+}
+
+void CRenderer::create_surface() {
+	Log()->debug("Creating surface");
+	if(!SDL_Vulkan_CreateSurface(m_Window.get(), static_cast<VkInstance>(m_Instance), reinterpret_cast<VkSurfaceKHR*>(&m_Surface))) {
+		Log()->error("Error creating a surface to draw on!");
+		throw std::runtime_error("Error creating a surface to draw on!");
+	}
+	Log()->debug("Surface created");
 }
 
 void CRenderer::setup_debug_callback() {
