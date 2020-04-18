@@ -30,6 +30,7 @@ class CRenderer : CLoggable {
 		vk::Extent2D m_SwapChainExtent;
 
 		std::vector<vk::Image> m_SwapChainImages;
+		std::vector<vk::ImageView> m_SwapChainImageViews;
 
 		std::vector<const char*> m_ValidationLayers;
 
@@ -40,6 +41,7 @@ class CRenderer : CLoggable {
 		bool check_device_ext_support(const vk::PhysicalDevice &Device) const;
 		void create_logical_device();
 		void create_surface();
+		void create_image_views();
 
 		struct QueueFamilyIndices {
 			std::optional<uint32_t> m_GraphicsFamily;

@@ -56,6 +56,7 @@ void CRenderer::init() {
 	pick_physical_device();
 	create_logical_device();
 	create_swap_chain();
+	create_image_views();
 	Log()->info("Renderer started.");
 }
 
@@ -381,6 +382,35 @@ void CRenderer::create_swap_chain() {
 	m_SwapChainExtent = Extent;
 
 	Log()->debug("Swap chain created");
+}
+
+void CRenderer::create_image_views() {
+	Log()->debug("Creating image views");
+	m_SwapChainImageViews.resize(m_SwapChainImages.size());
+
+	for (size_t i = 0; i < m_SwapChainImageViews.size(); i++) {
+		vk::ImageViewCreateInfo CreateInfo = {};
+		CreateInfo.image = m_SwapChainImages[i];
+		CreateInfo.viewType = vk::ImageViewType::e2D;
+		CreateInfo.format = m_SwapChainImageFormat;
+		CreateInfo.components.r = vk::ComponentSwizzle::eIdentity;
+		CreateInfo.components.g = vk::ComponentSwizzle::eIdentity;
+		CreateInfo.components.b = vk::ComponentSwizzle::eIdentity;
+		CreateInfo.components.a = vk::ComponentSwizzle::eIdentity;
+		CreateInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+		CreateInfo.subresourceRange.baseMipLevel = 0;
+		CreateInfo.subresourceRange.levelCount = 1;
+		CreateInfo.subresourceRange.baseArrayLayer = 0;
+		CreateInfo.subresourceRange.layerCount = 1;
+
+		try {
+			m_SwapChainImageViews[i] = m_Device.createImageView(CreateInfo);
+		} catch (vk::SystemError &err) {
+			throw std::runtime_error("failed to create image views!");
+		}
+	}
+
+	Log()->debug("Created image views");
 }
 
 bool CRenderer::check_validation_layer_support() {
