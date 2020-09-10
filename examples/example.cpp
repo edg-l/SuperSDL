@@ -2,9 +2,9 @@
 
 class CMyGame : public sps::CGame {
   protected:
-	virtual void on_load() {}
-	virtual void on_render(double delta) {}
-	virtual void on_update(double delta) {}
+	virtual void onLoad() {}
+	virtual void onRender(double delta) {}
+	virtual void onUpdate(double delta) {}
   public:
 	CMyGame() : sps::CGame("Ryozuki", "SuperSDLGame"){}
 };

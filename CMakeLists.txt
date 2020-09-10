@@ -45,6 +45,7 @@ target_include_directories(SuperSDL
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${SHADERC_INCLUDE_DIRS}
 )
 
 target_compile_options(SuperSDL PRIVATE

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <iterator>
 #include <map>
 #include <set>
@@ -37,6 +38,24 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
 	return VK_FALSE;
 }
 
+static std::vector<char> readFile(const std::string &filename) {
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		throw std::runtime_error("failed to open file!");
+	}
+
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> buffer(fileSize);
+
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+
+	file.close();
+
+	return buffer;
+}
+
 CRenderer::CRenderer(CEngine *pEngine) : CLoggable("renderer"), m_Window(nullptr, nullptr) {
 	m_pEngine = pEngine;
 
@@ -46,24 +65,24 @@ CRenderer::CRenderer(CEngine *pEngine) : CLoggable("renderer"), m_Window(nullptr
 void CRenderer::init() {
 	// TODO: Use a config
 	Log()->info("Starting vulkan renderer...");
-	m_Window = util::make_resource(SDL_CreateWindow, SDL_DestroyWindow, "", SDL_WINDOWPOS_UNDEFINED,
-								   SDL_WINDOWPOS_UNDEFINED,
-								   640, 480,
-								   SDL_WINDOW_VULKAN);
-	create_instance();
-	setup_debug_callback();
+	m_Window = util::makeResource(SDL_CreateWindow, SDL_DestroyWindow, "", SDL_WINDOWPOS_UNDEFINED,
+								  SDL_WINDOWPOS_UNDEFINED,
+								  640, 480,
+								  SDL_WINDOW_VULKAN);
+	createInstance();
+	setupDebugCallback();
 	create_surface();
-	pick_physical_device();
-	create_logical_device();
-	create_swap_chain();
-	create_image_views();
+	pickPhysicalDevice();
+	createLogicalDevice();
+	createSwapChain();
+	createImageViews();
 	Log()->info("Renderer started.");
 }
 
 void CRenderer::quit() {
 }
 
-void CRenderer::create_instance() {
+void CRenderer::createInstance() {
 	{
 		PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = m_DynamicLoader.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
 		if (vkGetInstanceProcAddr == nullptr) {
@@ -71,11 +90,11 @@ void CRenderer::create_instance() {
 		}
 		VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
-		if (EnableValidationLayers && !check_validation_layer_support()) {
+		if (EnableValidationLayers && !checkValidationLayerSupport()) {
 			throw std::runtime_error("validation layers requested, but not available!");
 		}
 		auto AppInfo = vk::ApplicationInfo(
-			engine()->get_game_name(),
+			engine()->getGameName(),
 			VK_MAKE_VERSION(1, 0, 0),
 			"SuperSDL",
 			VK_MAKE_VERSION(1, 0, 0),
@@ -130,7 +149,7 @@ void CRenderer::create_instance() {
 	// TODO: Initialize it also with a device later: https://github.com/KhronosGroup/Vulkan-Hpp#extensions--per-device-function-pointers
 }
 
-int CRenderer::rate_physical_device(const vk::PhysicalDevice &device) const {
+int CRenderer::ratePhysicalDevice(const vk::PhysicalDevice &device) const {
 	Log()->debug("Rating physical device: {}", device.getProperties().deviceName.data());
 	int score = 0;
 
@@ -147,7 +166,7 @@ int CRenderer::rate_physical_device(const vk::PhysicalDevice &device) const {
 	if (!Features.geometryShader)
 		return 0;
 
-	if (!is_device_suitable(device))
+	if (!isDeviceSuitable(device))
 		return 0;
 
 	Log()->debug("Score: {}", score);
@@ -155,7 +174,7 @@ int CRenderer::rate_physical_device(const vk::PhysicalDevice &device) const {
 	return score;
 }
 
-bool CRenderer::check_device_ext_support(const vk::PhysicalDevice &Device) const {
+bool CRenderer::checkDeviceExtSupport(const vk::PhysicalDevice &Device) const {
 	std::set<std::string> RequiredExtensions(DeviceExtensions.begin(), DeviceExtensions.end());
 
 	for (const auto &ext : Device.enumerateDeviceExtensionProperties()) {
@@ -165,26 +184,26 @@ bool CRenderer::check_device_ext_support(const vk::PhysicalDevice &Device) const
 	return RequiredExtensions.empty();
 }
 
-bool CRenderer::is_device_suitable(const vk::PhysicalDevice &Device) const {
-	QueueFamilyIndices Indices = find_queue_families(Device);
+bool CRenderer::isDeviceSuitable(const vk::PhysicalDevice &Device) const {
+	QueueFamilyIndices Indices = findQueueFamilies(Device);
 
-	bool ExtensionsSupported = check_device_ext_support(Device);
+	bool ExtensionsSupported = checkDeviceExtSupport(Device);
 
 	bool SwapChainGood = false;
 	if (ExtensionsSupported) {
-		SwapChainSupportDetails Details = query_swap_chain_support(Device);
+		SwapChainSupportDetails Details = querySwapChainSupport(Device);
 		SwapChainGood = !Details.m_Formats.empty() && !Details.m_PresentModes.empty();
 	}
 
-	return Indices.is_complete() && ExtensionsSupported && SwapChainGood;
+	return Indices.isComplete() && ExtensionsSupported && SwapChainGood;
 }
 
-void CRenderer::pick_physical_device() {
+void CRenderer::pickPhysicalDevice() {
 	Log()->debug("Picking a physical device");
 	std::multimap<int, vk::PhysicalDevice> Candidates;
 
 	for (const auto &device : m_Instance.enumeratePhysicalDevices()) {
-		int score = rate_physical_device(device);
+		int score = ratePhysicalDevice(device);
 		Candidates.insert(std::make_pair(score, device));
 	}
 
@@ -196,7 +215,7 @@ void CRenderer::pick_physical_device() {
 	}
 }
 
-CRenderer::QueueFamilyIndices CRenderer::find_queue_families(const vk::PhysicalDevice &Device) const {
+CRenderer::QueueFamilyIndices CRenderer::findQueueFamilies(const vk::PhysicalDevice &Device) const {
 	QueueFamilyIndices Indices;
 
 	auto Properties = Device.getQueueFamilyProperties();
@@ -211,7 +230,7 @@ CRenderer::QueueFamilyIndices CRenderer::find_queue_families(const vk::PhysicalD
 			Indices.m_PresentFamily = i;
 		}
 
-		if (Indices.is_complete())
+		if (Indices.isComplete())
 			break;
 		i++;
 	}
@@ -219,9 +238,9 @@ CRenderer::QueueFamilyIndices CRenderer::find_queue_families(const vk::PhysicalD
 	return Indices;
 }
 
-void CRenderer::create_logical_device() {
+void CRenderer::createLogicalDevice() {
 	Log()->debug("Creating logical device");
-	QueueFamilyIndices Indices = find_queue_families(m_PhysicalDevice);
+	QueueFamilyIndices Indices = findQueueFamilies(m_PhysicalDevice);
 
 	float priority = 1.0f;
 
@@ -267,7 +286,7 @@ void CRenderer::create_surface() {
 	Log()->debug("Surface created");
 }
 
-void CRenderer::setup_debug_callback() {
+void CRenderer::setupDebugCallback() {
 	if (!EnableValidationLayers)
 		return;
 
@@ -281,7 +300,7 @@ void CRenderer::setup_debug_callback() {
 	m_Instance.createDebugUtilsMessengerEXT(CreateDebugInfo);
 }
 
-CRenderer::SwapChainSupportDetails CRenderer::query_swap_chain_support(const vk::PhysicalDevice &Device) const {
+CRenderer::SwapChainSupportDetails CRenderer::querySwapChainSupport(const vk::PhysicalDevice &Device) const {
 	SwapChainSupportDetails Details;
 
 	Details.m_Capabilities = Device.getSurfaceCapabilitiesKHR(m_Surface);
@@ -291,7 +310,7 @@ CRenderer::SwapChainSupportDetails CRenderer::query_swap_chain_support(const vk:
 	return Details;
 }
 
-vk::SurfaceFormatKHR CRenderer::choose_surface_format(const std::vector<vk::SurfaceFormatKHR> &Formats) const {
+vk::SurfaceFormatKHR CRenderer::chooseSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &Formats) const {
 	for (const auto &Format : Formats) {
 		if (Format.format == vk::Format::eB8G8R8A8Srgb && Format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
 			return Format;
@@ -301,7 +320,7 @@ vk::SurfaceFormatKHR CRenderer::choose_surface_format(const std::vector<vk::Surf
 	return Formats[0];
 }
 
-vk::PresentModeKHR CRenderer::choose_present_mode(const std::vector<vk::PresentModeKHR> &Modes) const {
+vk::PresentModeKHR CRenderer::choosePresentMode(const std::vector<vk::PresentModeKHR> &Modes) const {
 	// https://vulkan-tutorial.com/en/Drawing_a_triangle/Presentation/Swap_chain
 
 	for (const auto &Mode : Modes) {
@@ -311,7 +330,7 @@ vk::PresentModeKHR CRenderer::choose_present_mode(const std::vector<vk::PresentM
 
 	return vk::PresentModeKHR::eFifo;
 }
-vk::Extent2D CRenderer::choose_swap_extent(const vk::SurfaceCapabilitiesKHR &Capabilities) const {
+vk::Extent2D CRenderer::chooseSwapExtent(const vk::SurfaceCapabilitiesKHR &Capabilities) const {
 	if (Capabilities.currentExtent.width != UINT32_MAX)
 		return Capabilities.currentExtent;
 	else {
@@ -325,13 +344,13 @@ vk::Extent2D CRenderer::choose_swap_extent(const vk::SurfaceCapabilitiesKHR &Cap
 	}
 }
 
-void CRenderer::create_swap_chain() {
+void CRenderer::createSwapChain() {
 	Log()->debug("Creating swap chain");
-	SwapChainSupportDetails Details = query_swap_chain_support(m_PhysicalDevice);
+	SwapChainSupportDetails Details = querySwapChainSupport(m_PhysicalDevice);
 
-	vk::SurfaceFormatKHR Format = choose_surface_format(Details.m_Formats);
-	vk::PresentModeKHR Mode = choose_present_mode(Details.m_PresentModes);
-	vk::Extent2D Extent = choose_swap_extent(Details.m_Capabilities);
+	vk::SurfaceFormatKHR Format = chooseSurfaceFormat(Details.m_Formats);
+	vk::PresentModeKHR Mode = choosePresentMode(Details.m_PresentModes);
+	vk::Extent2D Extent = chooseSwapExtent(Details.m_Capabilities);
 
 	uint32_t ImageCount = Details.m_Capabilities.minImageCount + 1;
 
@@ -348,7 +367,7 @@ void CRenderer::create_swap_chain() {
 		1,
 		vk::ImageUsageFlagBits::eColorAttachment);
 
-	QueueFamilyIndices Indices = find_queue_families(m_PhysicalDevice);
+	QueueFamilyIndices Indices = findQueueFamilies(m_PhysicalDevice);
 	uint32_t FamilyIndices[] = {Indices.m_GraphicsFamily.value(), Indices.m_PresentFamily.value()};
 
 	if (Indices.m_GraphicsFamily != Indices.m_PresentFamily) {
@@ -384,7 +403,7 @@ void CRenderer::create_swap_chain() {
 	Log()->debug("Swap chain created");
 }
 
-void CRenderer::create_image_views() {
+void CRenderer::createImageViews() {
 	Log()->debug("Creating image views");
 	m_SwapChainImageViews.resize(m_SwapChainImages.size());
 
@@ -413,7 +432,124 @@ void CRenderer::create_image_views() {
 	Log()->debug("Created image views");
 }
 
-bool CRenderer::check_validation_layer_support() {
+void CRenderer::createRenderPass() {
+	vk::AttachmentDescription colorAttachment = {};
+	colorAttachment.format = m_SwapChainImageFormat;
+	colorAttachment.samples = vk::SampleCountFlagBits::e1;
+	colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+	colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+	colorAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+	colorAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+	colorAttachment.initialLayout = vk::ImageLayout::eUndefined;
+	colorAttachment.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+
+	vk::AttachmentReference colorAttachmentRef = {};
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
+
+	vk::SubpassDescription subpass = {};
+	subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	vk::RenderPassCreateInfo renderPassInfo = {};
+	renderPassInfo.attachmentCount = 1;
+	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpass;
+}
+
+void CRenderer::createGraphicsPipeline() {
+	auto VertShaderCode = readFile("shaders/vert.spv");
+	auto FragShaderCode = readFile("shaders/frag.spv");
+
+	vk::ShaderModule VertShader = createShaderModule(VertShaderCode);
+	vk::ShaderModule FragShader = createShaderModule(FragShaderCode);
+
+	vk::PipelineShaderStageCreateInfo Stages[] = {
+		{vk::PipelineShaderStageCreateFlags(),
+		 vk::ShaderStageFlagBits::eVertex,
+		 VertShader,
+		 "main"},
+		{vk::PipelineShaderStageCreateFlags(),
+		 vk::ShaderStageFlagBits::eFragment,
+		 FragShader,
+		 "main"}};
+
+	auto VertexInputInfo = vk::PipelineVertexInputStateCreateInfo(
+		vk::PipelineVertexInputStateCreateFlags(),
+		0,
+		nullptr,
+		0,
+		nullptr);
+
+	auto InputAssembly = vk::PipelineInputAssemblyStateCreateInfo(
+		vk::PipelineInputAssemblyStateCreateFlags(),
+		vk::PrimitiveTopology::eTriangleList,
+		VK_FALSE);
+
+	vk::Viewport Viewport(0, 0, m_SwapChainExtent.width, m_SwapChainExtent.height, 0.0f, 1.0f);
+
+	vk::Rect2D Scissor(vk::Offset2D(0, 0), m_SwapChainExtent);
+
+	vk::PipelineViewportStateCreateInfo ViewportState = {};
+	ViewportState.viewportCount = 1;
+	ViewportState.pViewports = &Viewport;
+	ViewportState.scissorCount = 1;
+	ViewportState.pScissors = &Scissor;
+
+	vk::PipelineRasterizationStateCreateInfo Rasterizer = {};
+	Rasterizer.depthClampEnable = VK_FALSE;
+	Rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	Rasterizer.polygonMode = vk::PolygonMode::eFill;
+	Rasterizer.lineWidth = 1.0f;
+	Rasterizer.cullMode = vk::CullModeFlagBits::eBack;
+	Rasterizer.frontFace = vk::FrontFace::eClockwise;
+	Rasterizer.depthBiasEnable = VK_FALSE;
+
+	vk::PipelineMultisampleStateCreateInfo Multisampling = {};
+	Multisampling.sampleShadingEnable = VK_FALSE;
+	Multisampling.rasterizationSamples = vk::SampleCountFlagBits::e1;
+	Multisampling.minSampleShading = 1.0f;			// Optional
+	Multisampling.pSampleMask = nullptr;			// Optional
+	Multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+	Multisampling.alphaToOneEnable = VK_FALSE;		// Optional
+
+	vk::PipelineColorBlendAttachmentState ColorBlendAttachment;
+	ColorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+	ColorBlendAttachment.blendEnable = VK_FALSE;
+
+	vk::PipelineColorBlendStateCreateInfo ColorBlending = {};
+	ColorBlending.logicOpEnable = VK_FALSE;
+	ColorBlending.logicOp = vk::LogicOp::eCopy;
+	ColorBlending.attachmentCount = 1;
+	ColorBlending.pAttachments = &ColorBlendAttachment;
+	ColorBlending.blendConstants[0] = 0.0f;
+	ColorBlending.blendConstants[1] = 0.0f;
+	ColorBlending.blendConstants[2] = 0.0f;
+	ColorBlending.blendConstants[3] = 0.0f;
+
+	vk::PipelineLayoutCreateInfo PipelineLayoutInfo = {};
+	PipelineLayoutInfo.setLayoutCount = 0;			  // Optional
+	PipelineLayoutInfo.pSetLayouts = nullptr;		  // Optional
+	PipelineLayoutInfo.pushConstantRangeCount = 0;	  // Optional
+	PipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+	m_PipelineLayout = m_Device.createPipelineLayout(PipelineLayoutInfo);
+
+	m_Device.destroyShaderModule(FragShader);
+}
+
+vk::ShaderModule CRenderer::createShaderModule(const std::vector<char> &code) {
+	auto CreateInfo = vk::ShaderModuleCreateInfo(
+		vk::ShaderModuleCreateFlags(),
+		code.size(),
+		reinterpret_cast<const uint32_t *>(code.data()));
+
+	return m_Device.createShaderModule(CreateInfo);
+}
+
+bool CRenderer::checkValidationLayerSupport() {
 	auto AvailableLayers = vk::enumerateInstanceLayerProperties();
 	for (auto LayerName : m_ValidationLayers) {
 		bool Found = false;

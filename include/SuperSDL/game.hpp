@@ -17,9 +17,9 @@ class CGame : CLoggable {
 
   protected:
 	void stop();
-	virtual void on_load() = 0;
-	virtual void on_update(double delta) = 0;
-	virtual void on_render(double delta) = 0;
+	virtual void onLoad() = 0;
+	virtual void onUpdate(double delta) = 0;
+	virtual void onRender(double delta) = 0;
 
   public:
 	CGame(const char *pOrgName, const char *pGameName);

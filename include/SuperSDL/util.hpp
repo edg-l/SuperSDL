@@ -11,7 +11,7 @@
 namespace sps::util {
 
 template <typename Creator, typename Destructor, typename... Arguments>
-auto make_resource(Creator c, Destructor d, Arguments &&... args) {
+auto makeResource(Creator c, Destructor d, Arguments &&... args) {
 	auto r = c(std::forward<Arguments>(args)...);
 	if (!r) {
 		throw std::system_error(errno, std::generic_category());

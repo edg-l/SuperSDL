@@ -28,32 +28,36 @@ class CRenderer : CLoggable {
 		vk::SwapchainKHR m_SwapChain;
 		vk::Format m_SwapChainImageFormat;
 		vk::Extent2D m_SwapChainExtent;
+		vk::PipelineLayout m_PipelineLayout;
+		vk::Format m_SwapChainImageFormat;
 
 		std::vector<vk::Image> m_SwapChainImages;
 		std::vector<vk::ImageView> m_SwapChainImageViews;
 
 		std::vector<const char*> m_ValidationLayers;
 
-		void create_instance();
-		bool is_device_suitable(const vk::PhysicalDevice &Device) const;
-		int rate_physical_device(const vk::PhysicalDevice &Device) const;
-		void pick_physical_device();
-		bool check_device_ext_support(const vk::PhysicalDevice &Device) const;
-		void create_logical_device();
+		void createInstance();
+		bool isDeviceSuitable(const vk::PhysicalDevice &Device) const;
+		int ratePhysicalDevice(const vk::PhysicalDevice &Device) const;
+		void pickPhysicalDevice();
+		bool checkDeviceExtSupport(const vk::PhysicalDevice &Device) const;
+		void createLogicalDevice();
 		void create_surface();
-		void create_image_views();
+		void createImageViews();
+		void createRenderPass();
+		void createGraphicsPipeline();
 
 		struct QueueFamilyIndices {
 			std::optional<uint32_t> m_GraphicsFamily;
 			std::optional<uint32_t> m_PresentFamily;
 
-			bool is_complete() const {
+			bool isComplete() const {
 				return m_GraphicsFamily.has_value()
 					&& m_PresentFamily.has_value();
 			}
 		};
 
-		QueueFamilyIndices find_queue_families(const vk::PhysicalDevice &device) const;
+		QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice &device) const;
 
 		struct SwapChainSupportDetails {
 			vk::SurfaceCapabilitiesKHR m_Capabilities;
@@ -61,15 +65,17 @@ class CRenderer : CLoggable {
 			std::vector<vk::PresentModeKHR> m_PresentModes;
 		};
 
-		SwapChainSupportDetails query_swap_chain_support(const vk::PhysicalDevice &Device) const;
+		SwapChainSupportDetails querySwapChainSupport(const vk::PhysicalDevice &Device) const;
 
-		vk::SurfaceFormatKHR choose_surface_format(const std::vector<vk::SurfaceFormatKHR> &Formats) const;
-		vk::PresentModeKHR choose_present_mode(const std::vector<vk::PresentModeKHR> &Modes) const;
-		vk::Extent2D choose_swap_extent(const vk::SurfaceCapabilitiesKHR &Capabilities) const;
-		void create_swap_chain();
+		vk::SurfaceFormatKHR chooseSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &Formats) const;
+		vk::PresentModeKHR choosePresentMode(const std::vector<vk::PresentModeKHR> &Modes) const;
+		vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR &Capabilities) const;
+		void createSwapChain();
 
-		void setup_debug_callback();
-		bool check_validation_layer_support();
+		vk::ShaderModule createShaderModule(const std::vector<char> &code);
+
+		void setupDebugCallback();
+		bool checkValidationLayerSupport();
 		CEngine *engine() { return m_pEngine; }
 
 	public:
